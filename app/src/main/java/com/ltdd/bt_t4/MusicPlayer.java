@@ -2,28 +2,37 @@ package com.ltdd.bt_t4;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.content.Intent;
 import android.media.MediaPlayer;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.View;
-import android.widget.Button;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
+import android.widget.ListView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class MusicPlayer extends AppCompatActivity {
     private static final int CHOOSE_FILE_REQUESTCODE = 8777;
     private static final int PICKFILE_RESULT_CODE = 8778;
-    private Song song = new Song();
-    MediaPlayer mediaPlayer;
+    private Player player = new Player();
+    private MediaPlayer mediaPlayer;
     private Handler handler = new Handler();
-    ViewHolder viewHolder;
+    private ViewHolder viewHolder;
+    private Song current;
+    List<Song> playList = new ArrayList<Song>(Arrays.asList(
+            new Song("Một bước yêu vạn dặm đau", "mbyvdd"),
+            new Song("Maze (The King: Eternal Monarch OST Part 4) Instrumental", "maze"),
+            new Song("A Thousand Years - Christina Perri", "athousandyear")
+    ));
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -38,106 +47,117 @@ public class MusicPlayer extends AppCompatActivity {
                 findViewById(R.id.txtE),
                 findViewById(R.id.seekBar)
         );
+        current = playList.get(0);
+        bindEventForPlayList();
         bindEventForMediaPlayer();
     }
-    public void bindEventForMediaPlayer(){
+    public void bindEventForPlayList(){
+        ListView playListView = findViewById(R.id.lstSong);
+        playListView.setAdapter(new ArrayAdapter<String>(this, com.google.android.material.R.layout.support_simple_spinner_dropdown_item ,Arrays.asList(
+                playList.get(0).name,
+                playList.get(1).name,
+                playList.get(2).name
+        )));
 
-//        try {
-//            Button btnAddF = findViewById(R.id.button);
-//            btnAddF.setOnClickListener(new View.OnClickListener() {
-//                @Override
-//                public void onClick(View view) {
-//                    Intent chooseFile = new Intent(Intent.ACTION_GET_CONTENT);
-//                    chooseFile.setType("*/*");
-//                    chooseFile = Intent.createChooser(chooseFile, "Choose a file");
-//                    startActivityForResult(chooseFile, PICKFILE_RESULT_CODE);
-//                    onActivityResult(CHOOSE_FILE_REQUESTCODE, PICKFILE_RESULT_CODE, chooseFile);
-//                    Uri uri = chooseFile.getData();
-//                    Log.i("System", uri.getPath());
-//                }
-//            });
-            mediaPlayer = MediaPlayer.create(this, R.raw.mbyvdd);
-            viewHolder.name.setText("Một bước yêu vạn dặm đau");
-            viewHolder.prog.setClickable(false);
-            viewHolder.pause.setEnabled(false);
-            viewHolder.play.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    Toast.makeText(view.getContext(), "Playing Audio", Toast.LENGTH_SHORT).show();
-                    mediaPlayer.start();
-                    song.eTime = mediaPlayer.getDuration();
-                    song.sTime = mediaPlayer.getCurrentPosition();
-                    if (song.oTime == 0){
-                        viewHolder.prog.setMax(song.eTime);
-                        song.oTime = 1;
-                    }
-                    viewHolder.start.setText(String.format("%d min, %d sec",
-                            TimeUnit.MILLISECONDS.toMinutes(song.sTime),
-                            TimeUnit.MILLISECONDS.toSeconds(song.sTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(song.sTime))
-                    ));
-                    viewHolder.end.setText(String.format("%d min, %d sec",
-                            TimeUnit.MILLISECONDS.toMinutes(song.eTime),
-                            TimeUnit.MILLISECONDS.toSeconds(song.eTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(song.eTime))
-                    ));
-                    viewHolder.prog.setProgress(song.sTime);
-                    handler.postDelayed(UpdateSongTime, 100);
-                    viewHolder.pause.setEnabled(true);
-                    viewHolder.play.setEnabled(false);
-                }
-            });
-            viewHolder.pause.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    mediaPlayer.pause();
+        playListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                if(mediaPlayer.isPlaying()){
+                    mediaPlayer.stop();
+                    mediaPlayer.release();
+                    player.oTime = 0;
                     viewHolder.pause.setEnabled(false);
                     viewHolder.play.setEnabled(true);
-                    Toast.makeText(getApplicationContext(),"Pausing Audio",
-                            Toast.LENGTH_SHORT).show();
                 }
-            });
-            viewHolder.next.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    if ((song.sTime + song.fTime) <= song.eTime){
-                        song.sTime = song.sTime + song.fTime;
-                        mediaPlayer.seekTo(song.sTime);
-                    }else{
-                        Toast.makeText(getApplicationContext(),
-                                "Cannot jump forward 5 second",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-                    if (!viewHolder.play.isEnabled()){
-                        viewHolder.play.setEnabled(true);
-                    }
+                current = playList.get(i);
+                mediaPlayer = MediaPlayer.create(view.getContext(), getMediaIdByName(current.getfName()));
+                viewHolder.name.setText(current.getName());
+            }
+        });
+    }
+    public void bindEventForMediaPlayer() {
+        mediaPlayer = MediaPlayer.create(this, getMediaIdByName(current.getfName()));
+        viewHolder.name.setText(current.getName());
+        viewHolder.prog.setClickable(false);
+        viewHolder.pause.setEnabled(false);
+        viewHolder.play.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Toast.makeText(view.getContext(), "Playing Audio", Toast.LENGTH_SHORT).show();
+                mediaPlayer.start();
+                player.eTime = mediaPlayer.getDuration();
+                player.sTime = mediaPlayer.getCurrentPosition();
+                if (player.oTime == 0) {
+                    viewHolder.prog.setMax(player.eTime);
+                    player.oTime = 1;
                 }
-            });
+                viewHolder.start.setText(String.format("%d min, %d sec",
+                        TimeUnit.MILLISECONDS.toMinutes(player.sTime),
+                        TimeUnit.MILLISECONDS.toSeconds(player.sTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(player.sTime))
+                ));
+                viewHolder.end.setText(String.format("%d min, %d sec",
+                        TimeUnit.MILLISECONDS.toMinutes(player.eTime),
+                        TimeUnit.MILLISECONDS.toSeconds(player.eTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(player.eTime))
+                ));
+                viewHolder.prog.setProgress(player.sTime);
+                handler.postDelayed(UpdateSongTime, 100);
+                viewHolder.pause.setEnabled(true);
+                viewHolder.play.setEnabled(false);
+            }
+        });
+        viewHolder.pause.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mediaPlayer.pause();
+                viewHolder.pause.setEnabled(false);
+                viewHolder.play.setEnabled(true);
+                Toast.makeText(getApplicationContext(), "Pausing Audio",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+        viewHolder.next.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if ((player.sTime + player.fTime) <= player.eTime) {
+                    player.sTime = player.sTime + player.fTime;
+                    mediaPlayer.seekTo(player.sTime);
+                } else {
+                    Toast.makeText(getApplicationContext(),
+                            "Cannot jump forward 5 second",
+                            Toast.LENGTH_SHORT
+                    ).show();
+                }
+                if (!viewHolder.play.isEnabled()) {
+                    viewHolder.play.setEnabled(true);
+                }
+            }
+        });
 
-            viewHolder.prev.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    if((song.sTime - song.bTime) > 0){
-                        song.sTime = song.sTime - song.bTime;
-                        mediaPlayer.seekTo(song.sTime);
-                    }else{
-                        Toast.makeText(getApplicationContext(),
-                                "Cannot jump backward 5 seconds",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                    }
-                    if(!viewHolder.play.isEnabled()){
-                        viewHolder.play.setEnabled(true);
-                    }
+        viewHolder.prev.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if ((player.sTime - player.bTime) > 0) {
+                    player.sTime = player.sTime - player.bTime;
+                    mediaPlayer.seekTo(player.sTime);
+                } else {
+                    Toast.makeText(getApplicationContext(),
+                            "Cannot jump backward 5 seconds",
+                            Toast.LENGTH_SHORT
+                    ).show();
                 }
-            });
+                if (!viewHolder.play.isEnabled()) {
+                    viewHolder.play.setEnabled(true);
+                }
+            }
+        });
 //        }catch (Exception ex){
 //            Log.e("System", ex.getMessage());
 //        }
 
     }
-    class Song{
+    class Player {
         int oTime, sTime, eTime, fTime, bTime;
-        public Song(){
+        public Player(){
             oTime = sTime = eTime = 0;
             fTime = bTime = 5000;
         }
@@ -158,15 +178,44 @@ public class MusicPlayer extends AppCompatActivity {
             this.prog = prog;
         }
     }
+    class Song{
+        String name, fName;
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getfName() {
+            return fName;
+        }
+
+        public void setfName(String fName) {
+            this.fName = fName;
+        }
+
+        public Song(String name, String fName) {
+            this.name = name;
+            this.fName = fName;
+        }
+    }
+    public int getMediaIdByName(String resName){
+        String pkgName = getPackageName();
+        int resID = getResources().getIdentifier(resName, "raw", pkgName);
+        Log.i("CustomGridView", "Res Name: " + resName + "==> Res ID = " + resID);
+        return resID;
+    }
     private Runnable UpdateSongTime = new Runnable() {
         @Override
         public void run() {
-            song.sTime = mediaPlayer.getCurrentPosition();
+            player.sTime = mediaPlayer.getCurrentPosition();
             viewHolder.start.setText(String.format("%d min, %d sec",
-                    TimeUnit.MILLISECONDS.toMinutes(song.sTime),
-                    TimeUnit.MILLISECONDS.toSeconds(song.sTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(song.sTime))
+                    TimeUnit.MILLISECONDS.toMinutes(player.sTime),
+                    TimeUnit.MILLISECONDS.toSeconds(player.sTime) - TimeUnit.MINUTES.toSeconds(TimeUnit.MILLISECONDS.toMinutes(player.sTime))
             ));
-            viewHolder.prog.setProgress(song.sTime);
+            viewHolder.prog.setProgress(player.sTime);
             handler.postDelayed(this, 100);
         }
     };
